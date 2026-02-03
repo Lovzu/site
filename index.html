@@ -3,63 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            color: var(--tg-theme-text-color);
-            background: var(--tg-theme-bg-color);
-        }
-
-        .Main {
-            width: 100%;
-            padding: 25px;
-            text-align: center;
-
-        }
-
-        h1 {
-            margin-top: 40px;
-            margin-bottom: 10px;
-        }
-
-        img {
-            width: 70px;
-            margin: 30px auto;
-        }
-
-        .btn {
-            border: 0;
-            border-radius: 5px;
-            margin-top: 50px;
-            height: 60px;
-            width: 200px;
-            font-style: 20px;
-            font-weight: 500;
-            cursor: pointer;
-            color: var(--tg-theme-button-text-color);
-            background: var(--tg-theme-button-color);
-        }
-    .inpt {
-        width: 70px;
-    }
-        
-    </style>
+    <title>AI Image Generator</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="Main">
-        <h1>Тестовое приложение</h1>
-        <img src="{{ url_for('static', filename='bot.png') }}" alt="123">
-        <p></p>
-        <button class="btn">Кнопка</button>
-        <input class="inpt">Ввод<input>
+    <div class="container">
+        <!-- Шапка -->
+        <header class="header">
+            <div class="logo">✨</div>
+            <h1>AI Generator</h1>
+            <p class="subtitle">Создавайте изображения с помощью ИИ</p>
+        </header>
 
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+        <!-- Главная форма -->
+        <div class="main-content">
+            <!-- Секция ввода -->
+            <div class="card">
+                <h2 class="card-title">🎨 Настройки</h2>
+                
+                <!-- Позитивный промпт -->
+                <div class="form-group">
+                    <label for="positive">
+                        <span class="label-text">💭 Что вы хотите увидеть?</span>
+                    </label>
+                    <textarea 
+                        id="positive" 
+                        class="input-field"
+                        placeholder="Красивый закат над океаном..."
+                        rows="3"
+                    ></textarea>
+                </div>
+
+                <!-- Негативный промпт -->
+                <div class="form-group">
+                    <label for="negative">
+                        <span class="label-text">🚫 Что не хотите видеть?</span>
+                    </label>
+                    <textarea 
+                        id="negative" 
+                        class="input-field"
+                        placeholder="Размытие, искажения..."
+                        rows="2"
+                    ></textarea>
+                </div>
+
+                <!-- Шаги -->
+                <div class="form-group">
+                    <label>
+                        <span class="label-text">⚡ Шаги: <span id="stepsValue" class="value-display">20</span></span>
+                    </label>
+                    <input 
+                        type="range" 
+                        id="steps" 
+                        class="slider"
+                        min="10" 
+                        max="50" 
+                        value="20"
+                    >
+                    <div class="range-labels">
+                        <span>Быстро</span>
+                        <span>Качественно</span>
+                    </div>
+                </div>
+
+                <!-- Модель -->
+                <div class="form-group">
+                    <label for="model">
+                        <span class="label-text">🤖 Модель</span>
+                    </label>
+                    <select id="model" class="input-field">
+                        <option value="sd15">Stable Diffusion 1.5</option>
+                        <option value="sdxl">SDXL</option>
+                        <option value="flux">Flux</option>
+                    </select>
+                </div>
+
+                <!-- Кнопка генерации -->
+                <button id="generateBtn" class="btn-primary">
+                    <span class="btn-icon">🎨</span>
+                    <span>Создать изображение</span>
+                </button>
+            </div>
+
+            <!-- Секция результата -->
+            <div class="card result-card">
+                <h2 class="card-title">🖼️ Результат</h2>
+                
+                <!-- Пустое состояние -->
+                <div id="emptyState" class="empty-state">
+                    <div class="empty-icon">🎭</div>
+                    <p>Здесь появится ваше изображение</p>
+                </div>
+
+                <!-- Загрузка -->
+                <div id="loader" class="loader" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Генерация изображения...</p>
+                    <p class="loader-hint">Это может занять 10-30 секунд</p>
+                </div>
+
+                <!-- Результат -->
+                <div id="resultContainer" class="result-container" style="display: none;">
+                    <img id="resultImage" src="" alt="Результат" class="result-image">
+                    <div class="result-actions">
+                        <button id="downloadBtn" class="btn-secondary">
+                            <span>📥</span> Скачать
+                        </button>
+                        <button id="newBtn" class="btn-secondary">
+                            <span>🔄</span> Еще раз
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Ошибка -->
+                <div id="errorMessage" class="error-message" style="display: none;">
+                    <span class="error-icon">⚠️</span>
+                    <p id="errorText"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Футер -->
+        <footer class="footer">
+            <p>Powered by ComfyUI API</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
-
