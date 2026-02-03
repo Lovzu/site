@@ -76,52 +76,208 @@ downloadBtn.addEventListener('click', () => {
 // 🔧 ФУНКЦИЯ ДЛЯ РАБОТЫ С COMFYUI API
 // Замените эту функцию на реальную работу с вашим ComfyUI сервером
 async function generateImageWithComfyUI(positive, negative, steps, model) {
-    // ============================================
-    // ЗДЕСЬ НУЖНО ВСТАВИТЬ ВАШ КОД ДЛЯ COMFYUI
-    // ============================================
+    const COMFYUI_URL = "https://pleochroitic-extraversively-kairi.ngrok-free.dev";
     
-    // Пример структуры запроса к ComfyUI:
-    /*
-    const response = await fetch('ВАШ_COMFYUI_URL/prompt', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            prompt: {
-                // Здесь ваш workflow ComfyUI
-                "3": {
-                    "inputs": {
-                        "text": positive,
-                        // остальные параметры
-                    },
-                    "class_type": "CLIPTextEncode"
-                },
-                // ... остальные ноды
+    try {
+        // 1. Загружаем базовый workflow из файла
+        const workflowResponse = await fetch('workflow_api.json');
+        const workflow = await workflowResponse.json();
+        
+        // 2. Заменяем параметры в workflow
+        // Найдем нужные ноды по вашей структуре
+        
+        // Positive prompt (нода 48 по вашему коду)
+        if (workflow['41']) {
+            workflow['41'].inputs.text = positive;
+        }
+        
+        // Negative prompt (нода 50)
+        if (workflow['32']) {
+            workflow['32'].inputs.text = negative;
+        }
+        
+        // Steps (нода 3)
+        if (workflow['3']) {
+            workflow['3'].inputs.steps = steps;
+            workflow['3'].inputs.seed = Math.floor(Math.random() * 4294967295); // random seed
+        }
+        
+        // Width/Height (нода 13)
+        if (workflow['13']) {
+            workflow['13'].inputs.width = 512;
+            workflow['13'].inputs.height = 512;
+        }
+        
+        // Style (нода 45)
+        
+        console.log('📤 Отправка запроса в ComfyUI...');
+        
+        // 3. Отправляем workflow в ComfyUI
+        const response = await fetch(`${COMFYUI_URL}/prompt`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                prompt: workflow,
+                client_id: "telegram-miniapp-" + Date.now()
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Ошибка ComfyUI: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const promptId = data.prompt_id;
+        
+        console.log('✅ Prompt ID:', promptId);
+        
+        // 4. Ждем завершения генерации
+        console.log('⏳ Генерация изображения...');
+        await waitForCompletion(promptId, COMFYUI_URL);
+        
+        // 5. Получаем информацию о файле
+        const historyResponse = await fetch(`${COMFYUI_URL}/history/${promptId}`);
+        const history = await historyResponse.json();
+        
+        // 6. Извлекаем имя файла
+        const outputs = history[promptId]?.outputs;
+        
+        if (!outputs) {
+            throw new Error("Не удалось получить результаты");
+        }
+        
+        let filename = null;
+        let subfolder = null;
+        
+        for (const nodeId in outputs) {
+            if (outputs[nodeId].images && outputs[nodeId].images.length > 0) {
+                filename = outputs[nodeId].images[0].filename;
+                subfolder = outputs[nodeId].images[0].subfolder;
+                break;
             }
-        })
-    });
+        }
+        
+        if (!filename) {
+            throw new Error("Изображение не найдено в результатах");
+        }
+        
+        console.log('✅ Изображение готово:', filename);
+        
+        // 7. Формируем URL изображения
+        let imageUrl = `${COMFYUI_URL}/view?filename=${filename}&type=output`;
+        if (subfolder) {
+            imageUrl += `&subfolder=${subfolder}`;
+        }
+        
+        return imageUrl;
+        
+    } catch (error) {
+        console.error("❌ Ошибка генерации:", error);
+        throw error;
+    }
+}
+
+// Функция ожидания завершения
+async function waitForCompletion(promptId, baseUrl, maxWait = 120000) {
+    const startTime = Date.now();
+    let lastLogTime = 0;
     
-    const data = await response.json();
-    const promptId = data.prompt_id;
+    while (Date.now() - startTime < maxWait) {
+        try {
+            const response = await fetch(`${baseUrl}/history/${promptId}`);
+            const history = await response.json();
+            
+            // Проверяем есть ли наш prompt в истории
+            if (history[promptId]) {
+                const item = history[promptId];
+                
+                // Если есть outputs - значит готово
+                if (item.outputs && Object.keys(item.outputs).length > 0) {
+                    console.log("✅ Генерация завершена!");
+                    return true;
+                }
+                
+                // Проверяем ошибки
+                if (item.status && item.status.status_str === "error") {
+                    throw new Error(`Ошибка ComfyUI: ${JSON.stringify(item.status)}`);
+                }
+            }
+            
+            // Логируем каждые 3 секунды
+            const elapsed = Date.now() - startTime;
+            if (elapsed - lastLogTime > 3000) {
+                console.log(`⏳ Ожидание... (${Math.floor(elapsed / 1000)}s)`);
+                lastLogTime = elapsed;
+            }
+            
+            // Ждем 1 секунду перед следующей проверкой
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+        } catch (error) {
+            console.error("⚠️ Ошибка проверки статуса:", error);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+    }
     
-    // Ожидание завершения генерации
-    await waitForCompletion(promptId);
+    throw new Error("⏰ Превышено время ожидания генерации (2 минуты)");
+}
+
+// Функция ожидания завершения
+async function waitForCompletion(promptId, baseUrl, maxWait = 120000) {
+    const startTime = Date.now();
     
-    // Получение изображения
-    const imageUrl = await getImage(promptId);
-    return imageUrl;
-    */
+    while (Date.now() - startTime < maxWait) {
+        try {
+            const response = await fetch(`${baseUrl}/history/${promptId}`);
+            const history = await response.json();
+            
+            // Проверяем есть ли наш prompt в истории
+            if (history[promptId]) {
+                const item = history[promptId];
+                
+                // Проверяем статус
+                if (item.status) {
+                    // Завершено успешно
+                    if (item.status.completed === true) {
+                        console.log("✅ Генерация завершена!");
+                        return true;
+                    }
+                    
+                    // Ошибка
+                    if (item.status.status_str === "error") {
+                        throw new Error(`Ошибка ComfyUI: ${JSON.stringify(item.status)}`);
+                    }
+                }
+                
+                // Если есть outputs - значит готово
+                if (item.outputs && Object.keys(item.outputs).length > 0) {
+                    console.log("✅ Генерация завершена!");
+                    return true;
+                }
+            }
+            
+            // Ждем 1 секунду перед следующей проверкой
+            console.log(`⏳ Проверка статуса... (${Math.floor((Date.now() - startTime) / 1000)}s)`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+        } catch (error) {
+            console.error("⚠️ Ошибка проверки статуса:", error);
+            // Продолжаем попытки
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+    }
     
-    // ⚠️ ВРЕМЕННАЯ ЗАГЛУШКА ДЛЯ ДЕМОНСТРАЦИИ
-    // Удалите этот код и вставьте свой
+    throw new Error("⏰ Превышено время ожидания генерации (2 минуты)");
+}
     return new Promise((resolve) => {
         setTimeout(() => {
             // Это просто placeholder изображение для примера
             resolve('https://via.placeholder.com/512x512/3390ec/ffffff?text=AI+Generated');
         }, 2000);
     });
-}
+
 
 // Вспомогательные функции для отображения состояний
 function showLoader() {
